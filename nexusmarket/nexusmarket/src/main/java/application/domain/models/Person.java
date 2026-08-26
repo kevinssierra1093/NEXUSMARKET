@@ -10,9 +10,9 @@ public abstract class Person{
 
     private String identification;
     private String name;
-    private String Email;
-    private String phoneNumbre;
+    private String email;
+    private String phoneNumber;
     private String address;
     private Systemrol rol;
-
+    private String password;
 }
