@@ -14,5 +14,4 @@ public abstract class Person{
     private String phoneNumber;
     private String address;
     private Systemrol rol;
-    private String password;
 }

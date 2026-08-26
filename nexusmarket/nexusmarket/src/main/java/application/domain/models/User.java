@@ -8,7 +8,10 @@ import lombok.Setter;
 
 public class User extends Person {
 
-    private String password;
+    private Long userId;
     private String username;
+    private String password;
+    private userStatus status;
+    private MarketplaceParticipant participant;
 
 }
