@@ -6,6 +6,6 @@ import lombok.Setter;
 @Getter
 @Setter
 
-public class MarketplaceParticipant extends Person {
+public abstract class MarketplaceParticipant  {
 
 }
