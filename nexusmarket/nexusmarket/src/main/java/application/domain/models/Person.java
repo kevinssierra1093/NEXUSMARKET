@@ -1,5 +1,6 @@
 package application.domain.models;
 
+import application.domain.valueObjects.Systemrol;
 import lombok.Getter;
 import lombok.Setter;
 
