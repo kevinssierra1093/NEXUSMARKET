@@ -1,0 +1,327 @@
+### NexusMarket - complete business flow
+### Open this file in VS Code with the "REST Client" extension (humao.rest-client)
+### and click "Send Request" above each request, in order.
+### Tokens and identifiers are captured from previous responses ({{name.response.body.field}}).
+
+@baseUrl = http://localhost:8080/api
+
+############################################################
+# 1. Initial administrator (created on startup)
+############################################################
+
+# @name adminLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Admin123*"
+}
+
+###
+@adminToken = {{adminLogin.response.body.token}}
+
+############################################################
+# 2. Administrator incorporates a seller with its first warehouse
+############################################################
+
+# @name seller
+POST {{baseUrl}}/sellers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "identification": "900123456",
+  "fullName": "Luis Pérez",
+  "email": "luis@tiendaluis.co",
+  "phoneNumber": "3001234567",
+  "address": "Cra 5 # 10-20, Montería",
+  "businessName": "Tienda Luis",
+  "firstWarehouse": {
+    "name": "Bodega Luis",
+    "address": "Zona industrial, Montería"
+  }
+}
+
+###
+@sellerWarehouse = {{seller.response.body.warehouses[0].identifier}}
+
+### Seller system access
+POST {{baseUrl}}/users/participants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "username": "luis",
+  "password": "Vendedor123",
+  "role": "SELLER",
+  "identification": "900123456",
+  "fullName": "Luis Pérez",
+  "email": "luis@tiendaluis.co"
+}
+
+### Logistics operator
+POST {{baseUrl}}/users/staff
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "username": "operador",
+  "password": "Operador123",
+  "identification": "1067000111",
+  "fullName": "Carlos Operador",
+  "email": "carlos@nexusmarket.co",
+  "role": "LOGISTICS_OPERATOR"
+}
+
+############################################################
+# 3. Seller: product (starts SUSPENDED), initial stock, publication
+############################################################
+
+# @name sellerLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "luis",
+  "password": "Vendedor123"
+}
+
+###
+@sellerToken = {{sellerLogin.response.body.token}}
+
+# @name product
+POST {{baseUrl}}/products
+Authorization: Bearer {{sellerToken}}
+Content-Type: application/json
+
+{
+  "name": "Camiseta",
+  "description": "Camiseta de algodón",
+  "type": "PHYSICAL",
+  "variants": [
+    { "attributes": { "color": "rojo", "talla": "M" }, "price": 50000 },
+    { "attributes": { "color": "azul", "talla": "L" }, "price": 55000 }
+  ]
+}
+
+###
+@productId = {{product.response.body.identifier}}
+@variantId = {{product.response.body.variants[0].identifier}}
+
+# @name inbound
+POST {{baseUrl}}/inventory/inbound
+Authorization: Bearer {{sellerToken}}
+Content-Type: application/json
+
+{
+  "variantIdentifier": "{{variantId}}",
+  "warehouseIdentifier": "{{sellerWarehouse}}",
+  "quantity": 10
+}
+
+###
+@inventoryId = {{inbound.response.body.identifier}}
+
+POST {{baseUrl}}/products/{{productId}}/publish
+Authorization: Bearer {{sellerToken}}
+
+############################################################
+# 4. Buyer: self-registration, cart, confirmation, payment
+############################################################
+
+POST {{baseUrl}}/auth/register-buyer
+Content-Type: application/json
+
+{
+  "identification": "1067999888",
+  "fullName": "Ana Gómez",
+  "email": "ana@correo.co",
+  "phoneNumber": "3109876543",
+  "address": "Calle 30 # 5-10, Montería",
+  "primaryAddress": "Calle 30 # 5-10, Montería",
+  "additionalAddresses": ["Oficina: Av. Circunvalar # 20-15"],
+  "username": "ana",
+  "password": "Compradora123"
+}
+
+###
+
+# @name buyerLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "ana",
+  "password": "Compradora123"
+}
+
+###
+@buyerToken = {{buyerLogin.response.body.token}}
+
+GET {{baseUrl}}/products
+Authorization: Bearer {{buyerToken}}
+
+###
+
+# @name cart
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "variantIdentifier": "{{variantId}}",
+  "quantity": 2
+}
+
+###
+@orderId = {{cart.response.body.identifier}}
+
+POST {{baseUrl}}/orders/{{orderId}}/confirm
+Authorization: Bearer {{buyerToken}}
+
+###
+
+POST {{baseUrl}}/orders/{{orderId}}/payment
+Authorization: Bearer {{buyerToken}}
+
+###
+
+GET {{baseUrl}}/orders/{{orderId}}/invoice
+Authorization: Bearer {{buyerToken}}
+
+############################################################
+# 5. Logistics operator: dispatch, transport, delivery
+############################################################
+
+# @name opsLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "operador",
+  "password": "Operador123"
+}
+
+###
+@opsToken = {{opsLogin.response.body.token}}
+
+GET {{baseUrl}}/orders?status=PAID
+Authorization: Bearer {{opsToken}}
+
+###
+
+POST {{baseUrl}}/orders/{{orderId}}/dispatch
+Authorization: Bearer {{opsToken}}
+
+###
+
+# @name shipments
+GET {{baseUrl}}/orders/{{orderId}}/shipments
+Authorization: Bearer {{opsToken}}
+
+###
+@shipmentId = {{shipments.response.body.$[0].identifier}}
+
+PATCH {{baseUrl}}/shipments/{{shipmentId}}/status
+Authorization: Bearer {{opsToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_TRANSIT"
+}
+
+###
+
+POST {{baseUrl}}/shipments/{{shipmentId}}/delivery
+Authorization: Bearer {{opsToken}}
+
+###
+
+GET {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{buyerToken}}
+
+############################################################
+# 6. Return and refund
+############################################################
+
+# @name returnRequest
+POST {{baseUrl}}/returns
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "orderIdentifier": "{{orderId}}",
+  "variantIdentifier": "{{variantId}}",
+  "reason": "La talla no corresponde"
+}
+
+###
+@returnId = {{returnRequest.response.body.identifier}}
+
+POST {{baseUrl}}/returns/{{returnId}}/approve
+Authorization: Bearer {{adminToken}}
+
+###
+
+POST {{baseUrl}}/returns/{{returnId}}/reception
+Authorization: Bearer {{opsToken}}
+
+###
+
+# @name refund
+POST {{baseUrl}}/returns/{{returnId}}/refund
+Authorization: Bearer {{buyerToken}}
+
+###
+@refundId = {{refund.response.body.identifier}}
+
+POST {{baseUrl}}/refunds/{{refundId}}/approve
+Authorization: Bearer {{adminToken}}
+
+###
+
+POST {{baseUrl}}/refunds/{{refundId}}/process
+Authorization: Bearer {{adminToken}}
+
+############################################################
+# 7. Reports and audit (ADMINISTRATOR / SUPERVISOR)
+############################################################
+
+GET {{baseUrl}}/reports/orders
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/reports/inventory
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/reports/returns
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/reports/sellers
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/reports/sellers/900123456
+Authorization: Bearer {{sellerToken}}
+
+###
+
+GET {{baseUrl}}/audit/operations?entityType=Order&entityId={{orderId}}
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/audit/logs?type=ORDER_PAYMENT
+Authorization: Bearer {{adminToken}}
+
+###
+
+GET {{baseUrl}}/inventory/{{inventoryId}}/movements
+Authorization: Bearer {{sellerToken}}
